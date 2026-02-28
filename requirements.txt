@@ -1,3 +1,7 @@
+torch
+diffusers
+transformers
+accelerate
+safetensors
 gradio
 huggingface_hub
-python-dotenv

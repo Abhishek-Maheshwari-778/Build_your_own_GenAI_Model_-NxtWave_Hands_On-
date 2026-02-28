@@ -1,87 +1,83 @@
 import os
-from typing import List, Tuple
+from typing import Optional
 
 import gradio as gr
-from huggingface_hub import InferenceClient
+import torch
+from diffusers import StableDiffusionPipeline
 
 
 HF_TOKEN = os.getenv("HF_API_TOKEN")
-MODEL_ID = os.getenv("HF_MODEL_ID", "mistralai/Mixtral-8x7B-Instruct-v0.1")
+MODEL_ID = os.getenv("HF_MODEL_ID", "runwayml/stable-diffusion-v1-5")
 
 
-def build_client() -> InferenceClient | None:
+def load_pipeline() -> StableDiffusionPipeline:
     """
-    Create a Hugging Face InferenceClient if HF_API_TOKEN is available.
+    Load a Stable Diffusion pipeline similar to the base model download
+    in the original NxtWave notebook.
     """
-    if not HF_TOKEN:
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.float16 if device == "cuda" else torch.float32
+
+    auth_token: Optional[str] = HF_TOKEN if HF_TOKEN else None
+
+    pipe = StableDiffusionPipeline.from_pretrained(
+        MODEL_ID,
+        torch_dtype=dtype,
+        use_auth_token=auth_token,
+        safety_checker=None,
+    )
+    pipe.to(device)
+    return pipe
+
+
+pipe = load_pipeline()
+
+
+def generate_image(
+    prompt: str,
+    guidance_scale: float = 7.5,
+    num_inference_steps: int = 30,
+    seed: int = 42,
+):
+    """
+    Text-to-image generation using Stable Diffusion.
+    """
+    if not prompt.strip():
         return None
-    return InferenceClient(model=MODEL_ID, token=HF_TOKEN)
+
+    device = pipe.device
+    generator = torch.Generator(device=device)
+    if seed is not None:
+        try:
+            generator = generator.manual_seed(int(seed))
+        except ValueError:
+            generator = generator.manual_seed(42)
+
+    with torch.autocast(device.type if device.type != "mps" else "cpu"):
+        image = pipe(
+            prompt=prompt,
+            guidance_scale=guidance_scale,
+            num_inference_steps=num_inference_steps,
+            generator=generator,
+        ).images[0]
+
+    return image
 
 
-client = build_client()
-
-
-def format_messages(message: str, history: List[Tuple[str, str]]) -> List[dict]:
-    """
-    Convert Gradio chat history into OpenAI-style chat messages.
-    """
-    messages: List[dict] = [
-        {
-            "role": "system",
-            "content": (
-                "You are a helpful AI assistant. "
-                "Give clear, concise answers and explain concepts simply."
-            ),
-        }
-    ]
-
-    for human, bot in history:
-        if human:
-            messages.append({"role": "user", "content": human})
-        if bot:
-            messages.append({"role": "assistant", "content": bot})
-
-    messages.append({"role": "user", "content": message})
-    return messages
-
-
-def chat_bot(message: str, history: List[Tuple[str, str]]) -> str:
-    """
-    Main chat function used by Gradio.
-    """
-    if client is None:
-        return (
-            "HF_API_TOKEN environment variable is not set.\n\n"
-            "1. Go to Hugging Face and create a personal access token.\n"
-            "2. Set it locally, for example:\n"
-            "   - On Windows (PowerShell):  $env:HF_API_TOKEN = 'your_token_here'\n"
-            "   - In a .env file: HF_API_TOKEN=your_token_here\n"
-            "3. Restart the app.\n\n"
-            "Once HF_API_TOKEN is set, the app will call the Hugging Face Inference API."
-        )
-
-    messages = format_messages(message, history)
-
-    try:
-        completion = client.chat_completion(
-            model=MODEL_ID,
-            messages=messages,
-            max_tokens=256,
-            temperature=0.7,
-        )
-        # huggingface_hub returns a structure similar to OpenAI
-        return completion.choices[0].message["content"]
-    except Exception as e:
-        return f"Error while calling Hugging Face Inference API: {e}"
-
-
-demo = gr.ChatInterface(
-    fn=chat_bot,
-    title="Build Your Own GenAI Model – Chatbot",
+demo = gr.Interface(
+    fn=generate_image,
+    inputs=[
+        gr.Textbox(label="Prompt", lines=2, placeholder="A photo of a futuristic city at sunset"),
+        gr.Slider(1.0, 15.0, value=7.5, step=0.5, label="Guidance scale"),
+        gr.Slider(5, 50, value=30, step=1, label="Inference steps"),
+        gr.Number(value=42, label="Seed (optional, integer)"),
+    ],
+    outputs=gr.Image(label="Generated image"),
+    title="Build Your Own GenAI Model – Stable Diffusion Image Generator",
     description=(
-        "A simple GenAI chatbot built with Python, Gradio, and the "
-        "Hugging Face Inference API. Configure your HF_API_TOKEN and HF_MODEL_ID "
-        "to experiment with different models."
+        "Local Stable Diffusion text-to-image app inspired by the NxtWave "
+        "Fast-Dreambooth notebook. Uses a Hugging Face model like "
+        "`runwayml/stable-diffusion-v1-5`."
     ),
 )
 
