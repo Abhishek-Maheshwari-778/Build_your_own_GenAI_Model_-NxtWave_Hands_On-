@@ -1,4 +1,4 @@
-# Build Your Own GenAI Model – Stable Diffusion Notes
+# AI Portrait & Avatar Generator — Notes
 
 This project follows the spirit of the **NxtWave “Build your own GenAI Model”** notebook you have (`Fast-Dreambooth` / Stable Diffusion), but rebuilt to run locally on your machine (Python / Jupyter) and to deploy on **Hugging Face Spaces** and **Render**.
 

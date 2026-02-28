@@ -73,11 +73,10 @@ demo = gr.Interface(
         gr.Number(value=42, label="Seed (optional, integer)"),
     ],
     outputs=gr.Image(label="Generated image"),
-    title="Build Your Own GenAI Model – Stable Diffusion Image Generator",
+    title="AI Portrait & Avatar Generator",
     description=(
-        "Local Stable Diffusion text-to-image app inspired by the NxtWave "
-        "Fast-Dreambooth notebook. Uses a Hugging Face model like "
-        "`runwayml/stable-diffusion-v1-5`."
+        "Generate portraits and avatars from text prompts using Stable Diffusion. "
+        "Inspired by NxtWave Fast-Dreambooth. Model: runwayml/stable-diffusion-v1-5"
     ),
 )
 
